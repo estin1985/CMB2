@@ -84,6 +84,18 @@ class CMB2_hookup {
 				$this->once( 'admin_head', array( $this, 'add_post_enctype' ) );
 			}
 
+        } elseif ('comment' == $type) {
+            add_action( 'add_meta_boxes_comment', array( $this, 'add_comment_metaboxes' ) );
+            add_action( 'add_attachment', array( $this, 'edit_comment' ) );
+            add_action( 'edit_attachment', array( $this, 'edit_comment' ) );
+            add_action( 'edit_comment', array( $this, 'edit_comment' ), 10, 2 );
+
+            $this->once( 'admin_enqueue_scripts', array( $this, 'do_scripts' ) );
+
+            if ($has_upload && $pagenow === 'comment.php') {
+                $this->once( 'admin_head', array( $this, 'add_post_enctype' ) );
+            }
+
 		} elseif ( 'user' == $type ) {
 
 			$priority = $this->cmb->prop( 'priority' );
@@ -260,10 +272,29 @@ class CMB2_hookup {
 			 * Somewhere else in the post-screen
 			 */
 			if ( $this->cmb->prop( 'title' ) ) {
-				add_meta_box( $this->cmb->cmb_id, $this->cmb->prop( 'title' ), array( $this, 'post_metabox' ), $post_type, $this->cmb->prop( 'context' ), $this->cmb->prop( 'priority' ) );
+				add_meta_box( $this->cmb->cmb_id, $this->cmb->prop( 'title' ), array( $this, 'comment_metabox' ), $post_type, $this->cmb->prop( 'context' ), 'high' );
 			}
 		}
 	}
+
+    /**
+     * Add metaboxes (to 'comment' object type)
+     */
+    public function add_comment_metaboxes()
+    {
+        if ( ! $this->show_on() ) {
+            return;
+        }
+
+        foreach ( $this->cmb->prop( 'object_types' ) as $page ) {
+
+            if ( $this->cmb->prop( 'closed' ) ) {
+                add_filter( "postbox_classes_{$page}_{$this->cmb->cmb_id}", array( $this, 'close_metabox_class' ) );
+            }
+
+            add_meta_box( $this->cmb->cmb_id, $this->cmb->prop( 'title' ), array( $this, 'comment_metabox' ), $page, $this->cmb->prop( 'context' ), $this->cmb->prop( 'priority' ) );
+        }
+    }
 
 	/**
 	 * Add 'closed' class to metabox
@@ -283,6 +314,15 @@ class CMB2_hookup {
 	public function post_metabox() {
 		$this->cmb->show_form( get_the_ID(), 'post' );
 	}
+
+    /**
+     * Display metaboxes for a comment object
+     * @since  1.0.0
+     */
+    public function comment_metabox()
+    {
+        $this->cmb->show_form( get_comment_ID(), 'comment' );
+    }
 
 	/**
 	 * Display metaboxes for new user page
@@ -347,6 +387,37 @@ class CMB2_hookup {
 		// take a trip to reading railroad – if you pass go collect $200
 		$this->cmb->save_fields( $post_id, 'post', $_POST );
 	}
+
+    /**
+     * Save data from metabox
+     */
+    public function edit_comment($comment_id, $comment = false)
+    {
+        $comment_type = $comment ? $comment->comment_type : get_comment_type( $comment_id );
+        $comment_types = apply_filters('admin_comment_types_dropdown', array( 'comment' => 'Comments' ) );
+
+        $do_not_pass_go = (
+            // check nonce
+            ! isset( $_POST[ $this->cmb->nonce() ] )
+            || ! wp_verify_nonce( $_POST[ $this->cmb->nonce() ], $this->cmb->nonce() )
+            // check if autosave
+            || defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE
+            // commented out - fails on custom comment types due to weak filtering in `get_comment_type()`
+            || ( ! $comment_type && ! current_user_can( 'moderate_comments', $comment_id ) )
+            // check user editing permissions
+            || ! current_user_can( 'moderate_comments', $comment_id )
+            // get the metabox post_types & compare it to this post_type
+            || ! array_key_exists( $comment_type, $comment_types )
+        );
+
+        if ($do_not_pass_go) {
+            // do not collect $200
+            return;
+        }
+
+        // take a trip to reading railroad – if you pass go collect $200
+        $this->cmb->save_fields( $comment_id, 'comment', $_POST );
+    }
 
 	/**
 	 * Save data from metabox

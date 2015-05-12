@@ -272,7 +272,7 @@ class CMB2_hookup {
 			 * Somewhere else in the post-screen
 			 */
 			if ( $this->cmb->prop( 'title' ) ) {
-				add_meta_box( $this->cmb->cmb_id, $this->cmb->prop( 'title' ), array( $this, 'comment_metabox' ), $post_type, $this->cmb->prop( 'context' ), 'high' );
+				add_meta_box( $this->cmb->cmb_id, $this->cmb->prop( 'title' ), array( $this, 'post_metabox' ), $post_type, $this->cmb->prop( 'context' ), 'high' );
 			}
 		}
 	}
